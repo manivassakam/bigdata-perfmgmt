@@ -1,0 +1,2156 @@
+---
+title: "Workload Managment Clustering and classification model."
+author: "M MANIVASSAKAM"
+date: "July 26, 2017"
+output: html_document
+---
+
+# The code below has the following steps
+#1. Data organization - Extract Response Time,Average Priority,Concurrency and CPU Utilization.
+# and store it into respective matrices for all the workloads.
+#2.Compute Service Level Goal , detect and visualize anomalies.
+#3.Use Self Organized Maps to cluster the anomalies.
+#4.Attach Lables to anomalies and fit a classification Model.
+#5.Three Classification Models were considered. 1. Neural Networks, 2. Decision Tree, 3. Random Forest.
+#6.Consult a Resolved Anomaly Matrix.
+#7. Use the Resolved Anomaly Matrix and do row-wise multiplication with control parameter matrix
+#to extract the recommended control parameters for each cluster.
+
+
+```{r}
+library("cluster")
+library("ggplot2")
+library("factoextra")
+library("dummies")
+
+require(cluster)
+
+install.packages("klaR")
+library(klaR)
+
+library(kohonen)
+library(RCurl)
+
+```
+# SOM Color Palette
+```{r}
+
+dir = "C:/myAssignment/beznext/som_example/Kohonen-Self-organising-maps-in-R-master/Kohonen-Self-organising-maps-in-R-master"
+setwd(dir)
+# Colour palette definition
+pretty_palette <- c("#1f77b4", '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2')
+```
+
+```{r include=FALSE}
+datapath <- "C:/myAssignment/beznext/"
+
+wrkld.data <- read.csv(file=paste(datapath,'cleandata.csv',sep="/"),header=TRUE,sep=",")
+
+
+str(wrkld.data)
+dim(wrkld.data)
+attach(wrkld.data)
+head(wrkld.data)
+wrkld.data.df = data.frame(wrkld.data)
+head(wrkld.data.df)
+
+unique(wrkld.data.df$WORKLOAD_NAME)
+
+```
+
+
+```{r}
+Mode <- function(x, na.rm = FALSE) {
+  if(na.rm){
+    x = x[!is.na(x)]
+  }
+
+  ux <- unique(x)
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+```
+
+
+
+```{r}
+full_wrkld_hrly_resptime_df1 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  jan2_wrkld <- full_workload$`02-JAN-16`
+ 
+  workload_hr_jan2 <- jan2_wrkld[which(jan2_wrkld$HOUR_GMT == hr),]
+ 
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+hr_resp_jan2 <- tapply(workload_hr_jan2$TOTAL_RESP_TIME,workload_hr_jan2$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+
+result <- hr_resp_jan2
+
+return (result)
+}
+
+```
+
+```{r}
+full_wrkld_hrly_resptime_df2 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  jan3_wrkld <- full_workload$`03-JAN-16`
+
+ 
+  workload_hr_jan3 <- jan3_wrkld[which(jan3_wrkld$HOUR_GMT == hr),]
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+
+hr_resp_jan3 <- tapply(workload_hr_jan3$TOTAL_RESP_TIME,workload_hr_jan3$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+
+result <- hr_resp_jan3
+
+return (result)
+}
+
+```
+
+```{r}
+full_wrkld_hrly_resptime_df3 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+ 
+  jan4_wrkld <- full_workload$`04-JAN-16`
+  
+ 
+  workload_hr_jan4 <- jan4_wrkld[which(jan4_wrkld$HOUR_GMT == hr),]
+  
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan4 <- tapply(workload_hr_jan4$TOTAL_RESP_TIME,workload_hr_jan4$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan4
+
+return (result)
+}
+
+```
+
+```{r}
+full_wrkld_hrly_resptime_df4 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  
+  jan5_wrkld <- full_workload$`05-JAN-16`
+  
+ 
+   workload_hr_jan5 <- jan5_wrkld[which(jan5_wrkld$HOUR_GMT == hr),]
+ 
+
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan5 <- tapply(workload_hr_jan5$TOTAL_RESP_TIME,workload_hr_jan5$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan5
+
+return (result)
+}
+
+```
+
+```{r}
+full_wrkld_hrly_resptime_df5 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  
+  jan6_wrkld <- full_workload$`06-JAN-16`
+  
+ 
+  
+  workload_hr_jan6 <- jan6_wrkld[which(jan6_wrkld$HOUR_GMT == hr),]
+  
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+hr_resp_jan6 <- tapply(workload_hr_jan6$TOTAL_RESP_TIME,workload_hr_jan6$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+
+result <- hr_resp_jan6
+
+return (result)
+}
+
+```
+
+```{r}
+full_wrkld_hrly_resptime_df6 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+ 
+  jan9_wrkld <- full_workload$`09-JAN-16`
+  
+ 
+  workload_hr_jan9 <- jan9_wrkld[which(jan9_wrkld$HOUR_GMT == hr),]
+ 
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan9 <- tapply(workload_hr_jan9$TOTAL_RESP_TIME,workload_hr_jan9$WORKLOAD_NAME,max,na.rm=TRUE)
+
+result <- hr_resp_jan9
+
+return (result)
+}
+
+```
+
+```{r}
+full_wrkld_hrly_resptime_df7 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  
+  jan10_wrkld <- full_workload$`10-JAN-16`
+ 
+ 
+  
+  workload_hr_jan10 <- jan10_wrkld[which(jan10_wrkld$HOUR_GMT == hr),]
+ 
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+hr_resp_jan10 <- tapply(workload_hr_jan10$TOTAL_RESP_TIME,workload_hr_jan10$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan10
+
+return (result)
+}
+
+```
+
+```{r}
+full_wrkld_hrly_resptime_df8 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+ 
+  jan11_wrkld <- full_workload$`11-JAN-16`
+  
+ 
+  
+  workload_hr_jan11 <- jan11_wrkld[which(jan11_wrkld$HOUR_GMT == hr),]
+ 
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan11 <- tapply(workload_hr_jan11$TOTAL_RESP_TIME,workload_hr_jan11$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan11
+
+return (result)
+}
+
+```
+
+
+
+```{r}
+full_wrkld_hrly_resptime_df9 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+ 
+  jan12_wrkld <- full_workload$`12-JAN-16`
+ 
+  workload_hr_jan12 <- jan12_wrkld[which(jan12_wrkld$HOUR_GMT == hr),]
+  
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+hr_resp_jan12 <- tapply(workload_hr_jan12$TOTAL_RESP_TIME,workload_hr_jan12$WORKLOAD_NAME,max,na.rm=TRUE)
+
+result <- hr_resp_jan12
+
+return (result)
+}
+
+```
+
+
+```{r}
+full_wrkld_hrly_resptime_df10 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+
+  jan13_wrkld <- full_workload$`13-JAN-16`
+  
+  workload_hr_jan13 <- jan13_wrkld[which(jan13_wrkld$HOUR_GMT == hr),]
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan13 <- tapply(workload_hr_jan13$TOTAL_RESP_TIME,workload_hr_jan13$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan13
+
+return (result)
+}
+
+```
+
+
+```{r}
+full_wrkld_hrly_resptime_df11 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  
+  jan16_wrkld <- full_workload$`16-JAN-16`
+  
+  workload_hr_jan16 <- jan16_wrkld[which(jan16_wrkld$HOUR_GMT == hr),]
+ 
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan16 <- tapply(workload_hr_jan16$TOTAL_RESP_TIME,workload_hr_jan16$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan16
+
+return (result)
+}
+
+```
+
+
+```{r}
+full_wrkld_hrly_resptime_df12 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+ 
+  jan17_wrkld <- full_workload$`17-JAN-16`
+ 
+  workload_hr_jan17 <- jan17_wrkld[which(jan17_wrkld$HOUR_GMT == hr),]
+
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+
+hr_resp_jan17 <- tapply(workload_hr_jan17$TOTAL_RESP_TIME,workload_hr_jan17$WORKLOAD_NAME,max,na.rm=TRUE)
+
+result <- hr_resp_jan17
+
+return (result)
+}
+
+full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+
+```
+
+
+```{r}
+full_wrkld_hrly_resptime_df13 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+ 
+  jan18_wrkld <- full_workload$`18-JAN-16`
+
+  workload_hr_jan18 <- jan18_wrkld[which(jan18_wrkld$HOUR_GMT == hr),]
+  
+
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan18 <- tapply(workload_hr_jan18$TOTAL_RESP_TIME,workload_hr_jan18$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan18
+
+return (result)
+}
+
+```
+
+
+```{r}
+full_wrkld_hrly_resptime_df14 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  
+  jan19_wrkld <- full_workload$`19-JAN-16`
+  
+  workload_hr_jan19 <- jan19_wrkld[which(jan19_wrkld$HOUR_GMT == hr),]
+
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+hr_resp_jan19 <- tapply(workload_hr_jan19$TOTAL_RESP_TIME,workload_hr_jan19$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan19
+
+return (result)
+}
+
+```
+
+
+```{r}
+full_wrkld_hrly_resptime_df15 <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  #full_workload <- wrkld.data.df[wrkld.data.df$DATE_GMT]
+   full_workload <- split(wrkld.data.df, wrkld.data.df$DATE_GMT)
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+  
+  jan20_wrkld <- full_workload$`20-JAN-16`
+ 
+  
+  workload_hr_jan20 <- jan20_wrkld[which(jan20_wrkld$HOUR_GMT == hr),]
+
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+
+ #   workload_hr <- full_workload[which(full_workload$HOUR_GMT == 0),]
+#    split(workload_hr, workload_hr$DATE_GMT)
+    
+
+
+hr_resp_jan20 <- tapply(workload_hr_jan20$TOTAL_RESP_TIME,workload_hr_jan20$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+result <- hr_resp_jan20
+
+return (result)
+}
+
+
+
+```
+
+
+# Concurrency Parameter Matrix
+
+```{r}
+
+full_wrkld_hrly_concurrency_df <- function(hr) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  full_workload <- wrkld.data.df
+
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+
+  workload_hr <- full_workload[which(full_workload$HOUR_GMT == hr),]
+  
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+  
+hr_resp <- tapply(workload_hr$CONCURRENCY_LIMIT_VALUE,workload_hr$WORKLOAD_NAME,max,na.rm=TRUE)
+
+
+}
+
+
+```
+
+
+```{r}
+
+full_wrkld_hrly_cputil_df <- function(hr,param) 
+{
+
+  # Subset the data based on workload type.
+
+  #full_workload <- wrkld.data.df[grep(wktype, wrkld.data.df$WORKLOAD_NAME),]
+  full_workload <- wrkld.data.df
+
+if ( hr==24)
+{
+  
+        print('Complete Workload data')
+
+  # wrkld1_EDWOthLd_hr <- wrkld1_EDWOthLd
+    workload_hr <- full_workload
+
+}    
+else if (hr >= 0 & hr <= 23)
+{
+
+      print('Hourly Workload data')
+
+  workload_hr <- full_workload[which(full_workload$HOUR_GMT == hr),]
+  
+  
+}
+  else
+    
+  {
+    print('invalid')
+  }
+  
+  
+hr_resp <- tapply(workload_hr$CPUUTIL_PCT_LIMIT_VALUE,workload_hr$WORKLOAD_NAME,param,na.rm=TRUE)
+
+
+}
+
+
+```
+
+
+# Create a Matrix for Response Time for each Day.
+
+```{r}
+
+
+response_time_max_matrix_jan2 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df1(x))
+response_time_max_matrix_jan2
+
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan2  <- t(data.frame(response_time_max_matrix_jan2))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan2
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan2[is.na(response_time_max_matrix_jan2)] <- 0
+
+response_time_max_matrix_jan2_df <- data.frame(response_time_max_matrix_jan2)
+
+
+rownames(response_time_max_matrix_jan2_df) <- paste0('jan2_hr', 1:24)
+
+response_time_max_matrix_jan2_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan3 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df2(x))
+response_time_max_matrix_jan3
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan3  <- t(data.frame(response_time_max_matrix_jan3))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan3
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan3[is.na(response_time_max_matrix_jan3)] <- 0
+
+response_time_max_matrix_jan3_df <- data.frame(response_time_max_matrix_jan3)
+
+
+rownames(response_time_max_matrix_jan3_df) <- paste0('jan3_hr', 1:24)
+
+response_time_max_matrix_jan3_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan4 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df3(x))
+response_time_max_matrix_jan4
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan4  <- t(data.frame(response_time_max_matrix_jan4))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan4
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan4[is.na(response_time_max_matrix_jan4)] <- 0
+
+response_time_max_matrix_jan4_df <- data.frame(response_time_max_matrix_jan4)
+
+
+rownames(response_time_max_matrix_jan4_df) <- paste0('jan4_hr', 1:24)
+
+response_time_max_matrix_jan4_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan5 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df4(x))
+response_time_max_matrix_jan5
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan5  <- t(data.frame(response_time_max_matrix_jan5))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan5
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan5[is.na(response_time_max_matrix_jan5)] <- 0
+
+response_time_max_matrix_jan5_df <- data.frame(response_time_max_matrix_jan5)
+
+
+rownames(response_time_max_matrix_jan5_df) <- paste0('jan5_hr', 1:24)
+
+response_time_max_matrix_jan5_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan6 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df5(x))
+response_time_max_matrix_jan6
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan6  <- t(data.frame(response_time_max_matrix_jan6))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan6
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan6[is.na(response_time_max_matrix_jan6)] <- 0
+
+response_time_max_matrix_jan6_df <- data.frame(response_time_max_matrix_jan6)
+
+
+rownames(response_time_max_matrix_jan6_df) <- paste0('jan6_hr', 1:24)
+
+response_time_max_matrix_jan6_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan9 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df6(x))
+response_time_max_matrix_jan9
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan9  <- t(data.frame(response_time_max_matrix_jan9))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan9
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan9[is.na(response_time_max_matrix_jan9)] <- 0
+
+response_time_max_matrix_jan9_df <- data.frame(response_time_max_matrix_jan9)
+
+
+rownames(response_time_max_matrix_jan9_df) <- paste0('jan9_hr', 1:24)
+
+response_time_max_matrix_jan9_df
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan10 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df7(x))
+response_time_max_matrix_jan10
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan10  <- t(data.frame(response_time_max_matrix_jan10))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan10
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan10[is.na(response_time_max_matrix_jan10)] <- 0
+
+response_time_max_matrix_jan10_df <- data.frame(response_time_max_matrix_jan10)
+
+
+rownames(response_time_max_matrix_jan10_df) <- paste0('jan10_hr', 1:24)
+
+response_time_max_matrix_jan10_df
+
+```
+
+```{r}
+
+response_time_max_matrix_jan11 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df8(x))
+response_time_max_matrix_jan11
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan11  <- t(data.frame(response_time_max_matrix_jan11))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan11
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan11[is.na(response_time_max_matrix_jan11)] <- 0
+
+response_time_max_matrix_jan11_df <- data.frame(response_time_max_matrix_jan11)
+
+
+rownames(response_time_max_matrix_jan11_df) <- paste0('jan11_hr', 1:24)
+
+response_time_max_matrix_jan11_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan12 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df9(x))
+response_time_max_matrix_jan12
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan12  <- t(data.frame(response_time_max_matrix_jan12))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan12
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan12[is.na(response_time_max_matrix_jan12)] <- 0
+
+response_time_max_matrix_jan12_df <- data.frame(response_time_max_matrix_jan12)
+
+
+rownames(response_time_max_matrix_jan12_df) <- paste0('jan12_hr', 1:24)
+
+response_time_max_matrix_jan12_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan13 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df10(x))
+response_time_max_matrix_jan13
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan13  <- t(data.frame(response_time_max_matrix_jan13))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan13
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan13[is.na(response_time_max_matrix_jan13)] <- 0
+
+response_time_max_matrix_jan13_df <- data.frame(response_time_max_matrix_jan13)
+
+
+rownames(response_time_max_matrix_jan13_df) <- paste0('jan13_hr', 1:24)
+
+response_time_max_matrix_jan13_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan16 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df11(x))
+response_time_max_matrix_jan16
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan16  <- t(data.frame(response_time_max_matrix_jan16))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan16
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan16[is.na(response_time_max_matrix_jan16)] <- 0
+
+response_time_max_matrix_jan16_df <- data.frame(response_time_max_matrix_jan16)
+
+
+rownames(response_time_max_matrix_jan16_df) <- paste0('jan16_hr', 1:24)
+
+response_time_max_matrix_jan16_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan17 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df12(x))
+response_time_max_matrix_jan17
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan17  <- t(data.frame(response_time_max_matrix_jan17))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan17
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan17[is.na(response_time_max_matrix_jan17)] <- 0
+
+response_time_max_matrix_jan17_df <- data.frame(response_time_max_matrix_jan17)
+
+
+rownames(response_time_max_matrix_jan17_df) <- paste0('jan17_hr', 1:24)
+
+response_time_max_matrix_jan17_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan18 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df13(x))
+response_time_max_matrix_jan18
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan18  <- t(data.frame(response_time_max_matrix_jan18))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan18
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan18[is.na(response_time_max_matrix_jan18)] <- 0
+
+response_time_max_matrix_jan18_df <- data.frame(response_time_max_matrix_jan18)
+
+
+rownames(response_time_max_matrix_jan18_df) <- paste0('jan18_hr', 1:24)
+
+response_time_max_matrix_jan18_df
+
+
+
+```
+
+```{r}
+
+response_time_max_matrix_jan19 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df14(x))
+response_time_max_matrix_jan19
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan19  <- t(data.frame(response_time_max_matrix_jan19))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan19
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan19[is.na(response_time_max_matrix_jan19)] <- 0
+
+response_time_max_matrix_jan19_df <- data.frame(response_time_max_matrix_jan19)
+
+
+rownames(response_time_max_matrix_jan19_df) <- paste0('jan19_hr', 1:24)
+
+response_time_max_matrix_jan19_df
+
+```
+
+```{r}
+
+response_time_max_matrix_jan20 <- sapply(0:23, function(x) full_wrkld_hrly_resptime_df15(x))
+response_time_max_matrix_jan20
+# Transpose the Response Matrix
+
+response_time_max_matrix_jan20  <- t(data.frame(response_time_max_matrix_jan20))
+
+# Plot the transposed Response Matrix
+response_time_max_matrix_jan20
+# Replace the NA Values into Zeros
+response_time_max_matrix_jan20[is.na(response_time_max_matrix_jan20)] <- 0
+
+response_time_max_matrix_jan20_df <- data.frame(response_time_max_matrix_jan20)
+
+
+rownames(response_time_max_matrix_jan20_df) <- paste0('jan20_hr', 1:24)
+
+response_time_max_matrix_jan20_df
+
+```
+
+# Compbine all Response Time matrix values of each day into a single combined matrix.
+
+```{r}
+response_time_max_matrix_df <- rbind(response_time_max_matrix_jan2_df,
+                                     response_time_max_matrix_jan3_df,
+                                     response_time_max_matrix_jan4_df,
+                                     response_time_max_matrix_jan5_df,
+                                     response_time_max_matrix_jan6_df,
+                                     response_time_max_matrix_jan9_df,
+                                     response_time_max_matrix_jan10_df,
+                                     response_time_max_matrix_jan11_df,
+                                     response_time_max_matrix_jan12_df,
+                                     response_time_max_matrix_jan13_df,
+                                     response_time_max_matrix_jan16_df,
+                                     response_time_max_matrix_jan17_df,
+                                     response_time_max_matrix_jan18_df,
+                                     response_time_max_matrix_jan19_df,
+                                     response_time_max_matrix_jan20_df)
+
+response_time_max_matrix_df
+
+options(max.print=1000000)
+
+dim(response_time_max_matrix_df)
+head(response_time_max_matrix_df)
+tail(response_time_max_matrix_df)
+
+
+```
+
+# Equivalent Parameter Settings - Mean of all values within the hour
+```{r}
+
+full_workload <- data.frame(wrkld.data.df)
+
+
+yarn.param.cpu.mean <- function(x)
+{
+mean(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CPUUTIL_PCT_LIMIT_VALUE)
+}
+
+yarn.param.priority.mean <- function(x)
+{
+mean(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$AVGPRIORITY)
+}
+
+yarn.param.concur.mean <- function(x)
+{
+mean(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CONCURRENCY_LIMIT_VALUE)
+}
+
+
+```
+# Equivalent Parameter Settings - Mode - Most frequent values within the hour
+
+```{r}
+yarn.param.cpu.mode <- function(x)
+{
+Mode(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CPUUTIL_PCT_LIMIT_VALUE)
+}
+
+yarn.param.priority.mode <- function(x)
+{
+Mode(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$AVGPRIORITY)
+}
+
+yarn.param.concur.mode <- function(x)
+{
+Mode(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CONCURRENCY_LIMIT_VALUE)
+}
+
+```
+# Equivalent Parameter Settings - Maximum - setting with the hour
+
+```{r}
+yarn.param.cpu.max <- function(x)
+{
+max(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CPUUTIL_PCT_LIMIT_VALUE)
+}
+
+yarn.param.priority.max <- function(x)
+{
+max(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$AVGPRIORITY)
+}
+
+yarn.param.concur.max <- function(x)
+{
+max(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CONCURRENCY_LIMIT_VALUE)
+}
+```
+# Equivalent Parameter Settings - Min setting within the hour
+
+```{r}
+yarn.param.cpu.min <- function(x)
+{
+min(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CPUUTIL_PCT_LIMIT_VALUE)
+}
+
+yarn.param.priority.min <- function(x)
+{
+min(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$AVGPRIORITY)
+}
+
+yarn.param.concur.min <- function(x)
+{
+min(full_workload[which(full_workload$TOTAL_RESP_TIME == x),]$CONCURRENCY_LIMIT_VALUE)
+}
+```
+
+
+# Yarn Control Parameter Matrix values extracated at the Max Response Times 
+
+```{r}
+
+
+
+equiv_priority_matrix <- apply(response_time_max_matrix_df, c(1,2), yarn.param.priority.mode);
+equiv_priority_matrix[is.na(equiv_priority_matrix)] <- 0
+head(equiv_priority_matrix) 
+
+
+equiv_concurr_matrix <- apply(response_time_max_matrix_df, c(1,2), yarn.param.concur.mode);
+equiv_concurr_matrix[is.na(equiv_concurr_matrix)] <- 0
+head(equiv_concurr_matrix)
+
+
+
+equiv_cputil_matrix <- apply(response_time_max_matrix_df, c(1,2), yarn.param.cpu.mode);
+equiv_cputil_matrix[is.na(equiv_cputil_matrix)] <- 0
+head(equiv_cputil_matrix)
+
+
+
+```
+
+
+# Compute Service Level Goals and Set up thresholds for individual workloads
+```{r}
+
+# Service Level Goal for all the workloads set at 90% Threshold
+#threshold <- quantile(unlist(response_time_max_matrix),probs = 0.9)
+#threshold
+
+# For every workload compute the 90 the quantile as the SLG
+
+wrkld_slg <- apply(response_time_max_matrix_df, MARGIN = 2, FUN = quantile, probs = 0.9)
+wrkld_slg
+wrkld_slg_df <- data.frame(as.list(wrkld_slg))
+
+
+wrkld_slg_sorted<-data.frame(t(sort(wrkld_slg_df,decreasing = TRUE))) 
+colnames(wrkld_slg_sorted) <- "slg_90prcnt_quantile"
+wrkld_slg_sorted[,1] 
+wrkld_slg_sorted
+
+write.csv(wrkld_slg_df, file = "wrkld_slg_df.csv")
+write.csv(wrkld_slg_sorted, file = "wrkld_slg_df_sorted.csv")
+
+
+```
+
+# Construct the Anomaly Matrix and Visualize the anomalies.
+
+```{r}
+
+
+# Mark True of False if value exceeds the threshold
+#dat.TF <- (resp.matrix > threshold)
+#dat.TF
+
+# Mark 1 or 0 if value exceeds the threshold
+
+anomaly.01 <- ifelse(response_time_max_matrix_df> wrkld_slg,1,0)
+anomaly.01
+
+
+indx <- mapply("<",as.data.frame(response_time_max_matrix_df),wrkld_slg) 
+
+anomaly.matrix.full <- response_time_max_matrix_df
+
+anomaly.matrix.full[indx] <- 0
+anomaly.matrix.full
+
+head(anomaly.matrix.full,10)
+tail(anomaly.matrix.full,10)
+
+
+head(wrkld_slg_sorted)
+head(wrkld_slg)
+
+# The value by which the response time exceeds the service level goals set for the workload.
+
+exceedence.matrix <- sweep(anomaly.matrix.full,2,wrkld_slg)
+
+exceedence.matrix[exceedence.matrix<0] <- 0
+         
+
+head(exceedence.matrix)
+
+   
+library(reshape2)
+ ## Reshape data to long format
+#anomaly.matrix.full <- scale(anomaly.matrix.full, center = TRUE, scale = TRUE)
+#anomaly.matrix.full <- apply(anomaly.matrix.full, MARGIN = 2, FUN = function(X) (X - min(X))/diff(range(X)))
+#anomaly.matrix.full
+
+#anomaly.matrix.full
+max(anomaly.matrix.full)
+min(anomaly.matrix.full)
+mm <- melt(as.matrix(anomaly.matrix.full))
+head(mm)
+## Plot
+
+anomaly.data.matrix <- data.matrix(anomaly.matrix.full)
+anomaly.data.matrix
+#heatmap(anomaly.data.matrix, Rowv=NA, Colv=NA, col = heat.colors(256), margins=c(5,10))
+ 
+anomaly.01 <- anomaly.matrix.full
+anomaly.01[anomaly.01 > 0 ] <- 1
+
+mm2 <- melt(as.matrix(anomaly.01))
+head(mm2)
+ggplot(data=mm2) + theme_gray(base_size = 15) +
+    geom_tile(aes(x=Var2, y=Var1, fill=value)) +
+    theme(axis.text.x=element_text(angle=80, size=10, hjust=1, vjust=1),legend.position="bottom") +
+    scale_fill_gradient2(low="white", high="red",midpoint=0.5) +
+    labs(title = "Performance Anomalies across Workloads and Time", x = "Workloads", y = "Time of the Day")
+
+```
+
+```{r}
+
+anomaly.matrix <- anomaly.matrix.full
+
+```
+
+
+#Agglomerative Clustering - This method was finally not used.
+
+```{r}
+# Cluster Rows Timewise
+anomaly.matrix
+dist.mat <- dist(anomaly.matrix,method="euclidean")
+hclust.res <- hclust(dist.mat,method="average")
+plot(hclust.res)
+
+# Cluster Columns Workload Wise
+
+anomaly.matrix.tr <- t(anomaly.matrix)
+
+dist2.mat <- dist(anomaly.matrix.tr,method="euclidean")
+hclust2.res <- hclust(dist2.mat,method = "average")
+plot(hclust2.res)
+
+```
+
+# K-Means clustering - Row Wise - This method was finally not used.
+```{r}
+
+scaled.dat <- anomaly.matrix
+
+wrkld.anomaly.cluster  <- kmeans(scaled.dat,12, nstart = 20)
+names(wrkld.anomaly.cluster)
+
+
+# Optimal Number of Clusters
+
+ #Check for the optimal number of clusters given the data
+
+mydata <- anomaly.matrix
+wss <- (nrow(mydata)-1)*sum(apply(mydata,2,var))
+for (i in 2:15) wss[i] <- sum(kmeans(mydata,
+                                       centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares",
+     main="Assessing the Optimal Number of Clusters with the Elbow Method",
+     pch=20, cex=2)
+
+# The no.of clusters 5 chosen is already optimal.
+wrkld.anomaly.cluster
+wrkld.anomaly.cluster$centers
+
+dev.off()
+plot(scaled.dat, col=(wrkld.anomaly.cluster$cluster+1),main="K-Means clustering of Workload based on 90% response time",pch=20, cex=2)
+
+plot(scaled.dat, col = wrkld.anomaly.cluster$cluster, pch = 19, frame = FALSE,
+     main = "K-means with k = 10")
+points(wrkld.anomaly.cluster$centers, col = 1:2, pch = 8, cex = 3)
+
+
+fviz_cluster(wrkld.anomaly.cluster, data = scaled.dat)
+wrkld.anomaly.cluster$cluster
+table(wrkld.anomaly.cluster$cluster)
+
+
+```
+
+
+
+#Self Organized Maps for Clustering
+```{r}
+# Create a training data set (rows are samples, columns are variables
+# Here I am selecting a subset of my variables available in "data"
+data_train <- anomaly.matrix
+str(data_train)
+
+# Change the data frame with training data to a matrix
+# Also center and scale all variables to give them equal importance during
+# the SOM training process. 
+data_train_matrix <- as.matrix(data_train)
+#names(data_train_matrix) <- names(data_train)
+dim(data_train_matrix)
+data_train_matrix
+# Create the SOM Grid - you generally have to specify the size of the 
+# training grid prior to training the SOM. Hexagonal and Circular 
+# topologies are possible
+som_grid <- somgrid(xdim = 4, ydim=3, topo="hexagonal")
+
+# Finally, train the SOM, options for the number of iterations,
+# the learning rates, and the neighbourhood are available
+som_model <- som(data_train_matrix,	grid=som_grid,rlen=500,alpha=c(0.05,0.01),keep.data = TRUE)
+
+plot(som_model,type="codes")
+som_model$codes
+
+som_model$unit.classif
+table(som_model$unit.classif)
+
+
+plot(som_model, type="dist.neighbours")
+
+class.obj <- som_model$unit.classif
+class.obj <- as.integer(class.obj)
+
+
+plot(som_model, type = "mapping",classif=class.obj ,labels = class.obj)
+
+
+classmatrix <- classvec2classmat(class.obj)
+head(classmatrix,20)
+
+#identify.(som_model)
+
+```
+
+# -------------------- SOM VISUALISATION -----------------
+
+#Visualise the SOM model results
+# Plot of the training progress - how the node distances have stabilised over time.
+
+```{r}
+
+
+
+## custom palette as per kohonen package (not compulsory)
+source('coolBlueHotRed.R')
+
+plot(som_model, type = "changes")
+#counts within nodes , count of how many samples are mapped to each node on the map
+#plot(som_model, type = "counts", main="Node Counts", palette.name=coolBlueHotRed)
+plot(som_model, type = "counts", main="Node Counts")
+
+#map quality
+plot(som_model, type = "quality", main="Node Quality/Distance", palette.name=coolBlueHotRed)
+#neighbour distances
+plot(som_model, type="dist.neighbours", main = "SOM neighbour distances", palette.name=grey.colors)
+#code spread
+plot(som_model, type = "codes")
+matplot(t(getCodes(som_model)),type="l",lwd=3,lty=1)
+
+# Plot the heatmap for a variable at scaled / normalised values
+var <- 6 #define the variable to plot
+plot(som_model, type = "property", property = getCodes(som_model)[,var], main=colnames(getCodes(som_model))[var], palette.name=coolBlueHotRed)
+
+# Plot the original scale heatmap for a variable from the training set:
+var <- 2 #define the variable to plot
+var_unscaled <- aggregate(as.numeric(data_train[,var]), by=list(som_model$unit.classif), FUN=mean, simplify=TRUE)[,2]
+plot(som_model, type = "property", property=var_unscaled, main=names(data_train)[var], palette.name=coolBlueHotRed)
+rm(var_unscaled)
+
+#plot a variable from the original data set (will be uncapped etc.)
+# This function produces a menu for multiple heatmaps if a factor or character is chosen
+source('plotHeatMap.R')
+# A menu of all variables should be displayed if variable=0 
+# (note on Mac this will required working XQuartz installation.)
+data <- data.frame(anomaly.matrix)
+names(data)
+plotHeatMap(som_model, data, variable=0)
+```
+
+# ------------------ Clustering SOM results -------------------
+
+# show the WCSS metric for kmeans for different clustering sizes.
+# Can be used as a "rough" indicator of the ideal number of clusters
+
+```{r}
+
+
+mydata3 <- getCodes(som_model)
+mydata3
+wss3 <- (nrow(mydata3)-1)*sum(apply(mydata3,2,var))
+for (i in 1:6) wss3[i] <- sum(kmeans(mydata3,
+                                     centers=i)$withinss)
+par(mar=c(5.1,4.1,4.1,2.1))
+plot(1:7, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares", main="Within cluster sum of squares (WCSS)")
+
+# Form clusters on grid
+## use hierarchical clustering to cluster the codebook vectors
+som_cluster <- cutree(hclust(dist(getCodes(som_model))), 12)
+
+par(mfrow=c(1,1))
+
+# Show the map with different colours for every cluster						  
+plot(som_model, type="mapping", bgcol = pretty_palette[som_cluster], main = "Clustering of Anomaly Vectors", labels = class.obj)
+add.cluster.boundaries(som_model, som_cluster)
+
+#show the same plot with the codes instead of just colours
+plot(som_model, type="codes", bgcol = pretty_palette[som_cluster], main = "Anomaly behaviour in Individual Clusters")
+
+table(som_model$unit.classif)
+
+som_model$codes
+
+
+```
+
+# Plot SOM Code Vector for Cluster1
+
+```{r}
+dev.off()
+som.codes <- data.frame(t(som_model$codes[[1]]))
+plot(som.codes$V1,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=3,srt=45,cex.axis=0.7)
+
+```
+
+# Plot SOM Code Vector for Cluster2
+```{r}
+plot(som.codes$V2,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+
+```
+
+# Plot SOM Code Vector for Cluster3
+
+```{r}
+plot(som.codes$V3,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+
+```
+
+# Plot SOM Code Vector for Cluster4
+
+```{r}
+plot(som.codes$V4,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster5
+
+```{r}
+plot(som.codes$V5,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster6
+
+```{r}
+plot(som.codes$V6,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster7
+
+
+```{r}
+plot(som.codes$V7,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster8
+
+```{r}
+plot(som.codes$V8,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster9
+
+```{r}
+plot(som.codes$V9,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster10
+
+
+```{r}
+plot(som.codes$V10,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster11
+
+```{r}
+plot(som.codes$V11,type="l",lwd=3,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Plot SOM Code Vector for Cluster12
+
+```{r}
+plot(som.codes$V12,type="l",lwd=2,lty=1,axes=F,xlab="Workload", ylab="Response Time (ms)")
+axis(2)
+axis(side=1,at=1:nrow(som.codes),labels=rownames(som.codes),las=2,srt=45,cex.axis=0.7)
+```
+
+# Attach Class Labels for the control parameters.
+```{r}
+# Adding class Details to Control Parameters
+length(class.obj)
+dim(equiv_concurr_matrix)
+concurr_class <- cbind(equiv_concurr_matrix,class=class.obj)
+priority_class <- cbind(equiv_priority_matrix,class=class.obj)
+cputil_class <- cbind(equiv_cputil_matrix,class=class.obj)
+
+anomaly.matrix.class <- cbind(anomaly.matrix,class=class.obj)
+head(anomaly.matrix.class)
+```
+# Create a cleared Anomaly Matrix.
+# The element of the matrix is 1 if the anomaly gets cleared in the next hour else its 0.
+```{r}
+# Anomaly Matrix
+anomaly.01 <- ifelse(response_time_max_matrix_df> wrkld_slg,1,0)
+head(anomaly.01,3)
+
+# Resolved Anomaly Matrix
+resolv.anomaly <- diff(anomaly.01)
+head(resolv.anomaly,3)
+resolv.anomaly.01 <- ifelse(resolv.anomaly == -1 ,1,0)
+resolv.anomaly.01 <- data.frame(resolv.anomaly.01)
+resolv.anomaly.01
+head(resolv.anomaly.01,5)
+    
+```
+# Extracted Values
+```{r}
+
+equiv_concurr_matrix[resolv.anomaly.01 = 0] <- 0
+
+head(equiv_concurr_matrix)
+
+head(equiv_priority_matrix)
+
+equiv_priority_matrix[resolv.anomaly.01 = 0] <- 0
+head(equiv_priority_matrix)
+
+index = which(resolv.anomaly.01 == 1,arr.in=TRUE)
+index
+equiv_priority_matrix[index]
+dim(equiv_priority_matrix)
+
+dim(resolv.anomaly.01)
+
+```
+# Element Wise Multiplication
+```{r}
+
+reco_concurr_matrix <- equiv_concurr_matrix[1:359,]*resolv.anomaly.01
+head(reco_concurr_matrix)
+
+reco_priority_matrix <- equiv_priority_matrix[1:359,]*resolv.anomaly.01
+head(reco_priority_matrix)
+
+
+reco_cputil_matrix <- equiv_cputil_matrix[1:359,]*resolv.anomaly.01
+head(reco_cputil_matrix)
+```
+# Extracting Clusterwise AVG Priority Values
+
+```{r}
+priority_clusterwise <- cbind(reco_priority_matrix,class=class.obj[1:359])
+priority_clusterwise_df <- data.frame(priority_clusterwise)
+
+write.csv(priority_clusterwise_df, file = "priority_clusterwise_df.csv")
+
+
+priority_cluster1 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 1)
+priority_cluster1
+
+priority_cluster2 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 2)
+priority_cluster2
+
+priority_cluster3 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 3)
+priority_cluster3
+
+priority_cluster4 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 4)
+priority_cluster4
+
+
+priority_cluster5 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 5)
+priority_cluster5
+
+priority_cluster6 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 6)
+priority_cluster6
+
+priority_cluster7 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 7)
+priority_cluster7
+
+priority_cluster8 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 8)
+priority_cluster8
+
+priority_cluster9 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 9)
+priority_cluster9
+
+priority_cluster10 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 10)
+priority_cluster10
+
+priority_cluster11 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 11)
+priority_cluster11
+
+priority_cluster12 <- subset(priority_clusterwise_df, priority_clusterwise_df$class == 12)
+priority_cluster12
+
+
+```
+# Extracting Clusterwise Concurrency Values
+
+```{r}
+
+concurrency_clusterwise <- cbind(reco_concurr_matrix,class=class.obj[1:359])
+concurrency_clusterwise_df <- data.frame(concurrency_clusterwise)
+
+write.csv(concurrency_clusterwise_df, file = "concurrency_clusterwise_df.csv")
+
+
+concurrency_cluster1 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 1)
+concurrency_cluster1
+
+concurrency_cluster2 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 2)
+concurrency_cluster2
+
+concurrency_cluster3 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 3)
+concurrency_cluster3
+
+concurrency_cluster4 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 4)
+concurrency_cluster4
+
+
+concurrency_cluster5 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 5)
+concurrency_cluster5
+
+concurrency_cluster6 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 6)
+concurrency_cluster6
+
+concurrency_cluster7 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 7)
+concurrency_cluster7
+
+concurrency_cluster8 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 8)
+concurrency_cluster8
+
+concurrency_cluster9 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 9)
+concurrency_cluster9
+
+concurrency_cluster10 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 10)
+concurrency_cluster10
+
+concurrency_cluster11 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 11)
+concurrency_cluster11
+
+concurrency_cluster12 <- subset(concurrency_clusterwise_df, concurrency_clusterwise_df$class == 12)
+concurrency_cluster12
+
+```
+# Extracting Clusterwise CPU Utilization Values
+```{r}
+cputil_clusterwise <- cbind(reco_cputil_matrix,class=class.obj[1:359])
+cputil_clusterwise_df <- data.frame(cputil_clusterwise)
+
+write.csv(cputil_clusterwise_df, file = "cputil_clusterwise_df.csv")
+
+
+cputil_cluster1 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 1)
+cputil_cluster1
+
+cputil_cluster2 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 2)
+cputil_cluster2
+
+cputil_cluster3 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 3)
+cputil_cluster3
+
+cputil_cluster4 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 4)
+cputil_cluster4
+
+
+cputil_cluster5 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 5)
+cputil_cluster5
+
+cputil_cluster6 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 6)
+cputil_cluster6
+
+cputil_cluster7 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 7)
+cputil_cluster7
+
+cputil_cluster8 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 8)
+cputil_cluster8
+
+cputil_cluster9 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 9)
+cputil_cluster9
+
+cputil_cluster10 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 10)
+cputil_cluster10
+
+cputil_cluster11 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 11)
+cputil_cluster11
+
+cputil_cluster12 <- subset(cputil_clusterwise_df, cputil_clusterwise_df$class == 12)
+cputil_cluster12
+
+
+```
+
+
+# Supervised SOM .. This method does not work.
+
+```{r}
+nrow(anomaly.matrix.class)
+training_indices <- sample(nrow(anomaly.matrix.class), 300)
+anomaly.training <- scale(anomaly.matrix.class[training_indices,1:66])
+
+dim(anomaly.training)
+
+anomaly.testing <- scale(anomaly.matrix.class[-training_indices,1:66], center = attr(anomaly.training, 
+    "scaled:center"), scale = attr(anomaly.training, "scaled:scale"))
+
+
+dim(anomaly.testing)
+
+```
+
+#We'll use the xyf() function to create a supervised SOM and classification of anomalies by their position on the input matrix. #We'll randomly divide our data into training and testing sets.
+
+```{r}
+Anomaly.SOM3 <- xyf(anomaly.training, classvec2classmat(anomaly.matrix.class$class[training_indices]),grid = somgrid(4, 3,"hexagonal"), rlen = 100)
+
+
+```
+#Now let's check the accuracy of the prediction:
+```{r}
+
+#anomaly.test <- data.matrix(anomaly.testing)
+
+anomaly.test <- as.data.frame(anomaly.testing)
+
+
+
+class.prediction <- predict(Anomaly.SOM3, newdata = anomaly.test)
+class.prediction$predictions[[2]]
+table(anomaly.matrix.class[-training_indices, "class"], class.prediction$predictions[[2]])
+
+class.prediction$unit.classif
+```
+
+# Classification using Neural Networks with proper classification labels wise split of training and test data.
+```{r}
+library(nnet)
+
+anomaly.01.class <- cbind(anomaly.01,class=class.obj)
+head(anomaly.01.class)
+anomaly.01.class.df <- data.frame(anomaly.01.class)
+
+table(anomaly.01.class.df$class)
+
+library(caret)
+intrain<-createDataPartition(y=anomaly.01.class.df$class,p=0.65,list=FALSE)
+intrain
+anomaly.training<-anomaly.01.class.df[intrain,]
+anomaly.testing<-anomaly.01.class.df[-intrain,]
+
+table(anomaly.training$class)
+table(anomaly.testing$class)
+#Setting training set index
+anomaly.train.idx<- intrain
+
+#Setting test set index
+
+anomaly.test.idx <- setdiff(1:360,anomaly.train.idx)
+
+#attribute of the dataset , that you want to predict
+
+ideal <- class.ind(anomaly.01.class.df$class)
+ideal
+
+
+#Train the model, -67 because you want to leave out the class attribute , 
+#the dataset had a total of 8 attributes with the last one as the predicted one
+
+anomaly.ANN = nnet(anomaly.01.class.df[anomaly.train.idx,-67], ideal[anomaly.train.idx,], size=12, softmax=TRUE)
+summary(anomaly.ANN)
+#Predict on testset
+predict.class <-   predict(anomaly.ANN, anomaly.01.class.df[anomaly.test.idx,-67], type="class")
+length(predict.class)
+actual.class <-    anomaly.01.class.df[anomaly.test.idx,]$class
+length(actual.class)
+# Calculate Classification accuracy
+#table(predict.class,actual.class)
+dim(actual.class)
+require(caret)
+table(actual.class)
+table(predict.class)
+
+predicted <- predict.class
+reference <- actual.class
+u = union(predicted, reference)
+t = table(factor(predicted, u), factor(reference, u))
+confusionMatrix(t)
+
+library(nnet)
+library(devtools)
+library(NeuralNetTools)
+plotnet(anomaly.ANN)
+
+#confusionMatrix(predict.class, actual.class)   
+
+```
+
+#Decision Tree Based Classifier   
+```{r}
+library(rpart.plot)
+train.data <- data.frame(anomaly.01.class.df[anomaly.train.idx,])
+train.data
+fit <- rpart(class ~ ., data = train.data,method="class")
+summary(fit)
+
+rpart.plot(fit)
+#Predict Output 
+predicted= predict(fit,newdata=anomaly.01.class.df[anomaly.test.idx,-67],type ="class")
+actual = anomaly.01.class.df[anomaly.test.idx,]$class
+predicted
+
+reference <- actual
+u = union(predicted, reference)
+t = table(factor(predicted, u), factor(reference, u))
+
+confusionMatrix(t)   
+
+
+```
+# Random Forest Classifier
+```{r}
+library(randomForest)
+train.data$class <- as.factor(train.data$class)                   
+rf.fit <- randomForest(class ~ ., data = train.data,ntree=500,importance =TRUE)
+summary(rf.fit)
+predicted= predict(rf.fit,newdata=anomaly.01.class.df[anomaly.test.idx,-67],type="response")
+actual = anomaly.01.class.df[anomaly.test.idx,]$class
+predicted
+
+reference <- actual
+u = union(predicted, reference)
+t = table(factor(predicted, u), factor(reference, u))
+
+x <- confusionMatrix(t) 
+
+plot(x, vars = c("kappa", "index", "ROME", "AUC"),  scale_y = TRUE)
+
+
+```
+
